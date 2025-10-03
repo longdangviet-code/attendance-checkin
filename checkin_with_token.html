@@ -93,10 +93,10 @@ document.getElementById('btnSubmit').addEventListener('click', function(){
   if (!lat || !lng) { alert('Vui lòng bấm "Lấy vị trí" và bật quyền vị trí (Allow).'); return; }
 
   // Optional: kiểm tra khoảng cách đến tâm lớp
-  const classLat = 10.762622;
-  const classLng = 106.660172;
+  const classLat = 21.209876;
+  const classLng = 105.808822;
   const dist = haversine(lat, lng, classLat, classLng);
-  const maxMeters = 300;
+  const maxMeters = 00;
   if (dist > maxMeters) {
     if (!confirm("Bạn đang ở cách lớp " + dist + " m (vượt quá " + maxMeters + " m). Vẫn gửi?")) {
       return;
