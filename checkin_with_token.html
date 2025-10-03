@@ -96,7 +96,7 @@ document.getElementById('btnSubmit').addEventListener('click', function(){
   const classLat = 21.209876;
   const classLng = 105.808822;
   const dist = haversine(lat, lng, classLat, classLng);
-  const maxMeters = 00;
+  const maxMeters = 150;
   if (dist > maxMeters) {
     if (!confirm("Bạn đang ở cách lớp " + dist + " m (vượt quá " + maxMeters + " m). Vẫn gửi?")) {
       return;
