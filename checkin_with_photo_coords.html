@@ -197,7 +197,7 @@ document.getElementById('btnSubmit').addEventListener('click', function(){
 
   document.getElementById('result').innerText = 'Đang gửi...';
 
-  fetch(WEBHOOK_URL, {
+  fetch("https://defaultfc4a97f77b1445b7bf4aef4e95696c.50.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/993a9e1472c24fd7864f8a3d2d1a5b12/triggers/manual/paths/invoke?api-version=1", {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -226,63 +226,3 @@ document.getElementById('btnSubmit').addEventListener('click', function(){
 </script>
 </body>
 </html>
-/**
- * Hàm này chịu trách nhiệm gửi dữ liệu chấm công đến Power Automate.
- * @param {string} employeeId - ID của nhân viên (ví dụ: 'EMP001').
- * @param {number} latitude - Vĩ độ GPS.
- * @param {number} longitude - Kinh độ GPS.
- * @param {string} base64ImageString - Chuỗi base64 của hình ảnh (phải bao gồm cả phần đầu, ví dụ: 'data:image/jpeg;base64,...').
- */
-async function sendCheckinToPowerAutomate(employeeId, latitude, longitude, base64ImageString) {
-    // 👇 QUAN TRỌNG: Dán URL của Power Automate của bạn vào đây!
-    const powerAutomateUrl = 'https://defaultfc4a97f77b1445b7bf4aef4e95696c.50.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/993a9e1472c24fd7864f8a3d2d1a5b12/triggers/manual/paths/invoke?api-version=1';
-
-    // 1. Chuẩn bị đối tượng dữ liệu để gửi đi.
-    // Tên các thuộc tính (employeeId, timestamp,...) phải khớp chính xác
-    // với những gì bạn đã định nghĩa trong JSON Schema của Power Automate.
-    const checkinData = {
-        employeeId: employeeId,
-        timestamp: new Date().toISOString(), // Tự động lấy thời gian hiện tại theo chuẩn ISO
-        latitude: latitude,
-        longitude: longitude,
-        photo: base64ImageString
-    };
-
-    // Hiển thị thông báo cho người dùng biết là đang xử lý
-    alert('Đang gửi dữ liệu chấm công, vui lòng đợi...');
-
-    try {
-        // 2. Gửi yêu cầu bằng hàm fetch
-        const response = await fetch(powerAutomateUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(checkinData) // Chuyển đối tượng JavaScript thành chuỗi JSON
-        });
-
-        // 3. Xử lý phản hồi từ Power Automate
-        if (response.ok) { // response.ok là true nếu HTTP status là 200-299
-            // Nếu bạn cấu hình Power Automate trả về JSON
-            const result = await response.json();
-            console.log('Phản hồi thành công:', result);
-            alert(`Thành công: ${result.message}`); // Hiển thị thông báo từ Flow
-
-            // --- GHI CHÚ ---
-            // Nếu bạn cấu hình Power Automate trả về Text đơn giản, hãy dùng dòng sau:
-            // const resultText = await response.text();
-            // alert(resultText);
-
-        } else {
-            // Xử lý lỗi từ server (ví dụ: Power Automate bị lỗi)
-            const errorText = await response.text();
-            console.error('Lỗi từ Power Automate:', response.status, errorText);
-            alert(`Gửi thất bại! Lỗi: ${response.status}. Vui lòng thử lại.`);
-        }
-
-    } catch (error) {
-        // Xử lý lỗi mạng (ví dụ: mất kết nối internet)
-        console.error('Lỗi mạng hoặc lỗi khi gửi yêu cầu:', error);
-        alert('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại đường truyền internet và thử lại.');
-    }
-}
