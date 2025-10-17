@@ -55,173 +55,116 @@
   </div>
 
 <script>
-/* ====== CẤU HÌNH NGẮN ======
-  - Thay classLat/classLng bằng tọa độ lớp (lấy từ Google Maps).
-  - WEBHOOK_URL là endpoint Power Automate (When an HTTP request is received).
-  - API_TOKEN là token bí mật (phải khớp với Flow).
-  - RADIUS_METERS: bán kính hợp lệ (100m).
-*/
-const WEBHOOK_URL = "https://defaultfc4a97f77b1445b7bf4aef4e95696c.50.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/993a9e1472c24fd7864f8a3d2d1a5b12/triggers/manual/paths/invoke?api-version=1";
-const API_TOKEN = "gachanngan2804";
+/* ====== CẤU HÌNH ====== */
+const WEBHOOK_URL = "https://defaultfc4a97f77b1445b7bf4aef4e95696c.50.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/993a9e1472c24fd7864f8a3d2d1a5b12/triggers/manual/paths/invoke?api-version=1";
+const API_TOKEN   = "gachanngan2804"; 
+const CLASS_LAT   = 21.209876;   // tọa độ lớp
+const CLASS_LNG   = 105.808822;
+const RADIUS_M    = 200;         // bán kính hợp lệ (m)
 
-// Thay tọa độ lớp tại đây (ví dụ: 10.762622, 106.660172)
-const classLat = 21.209876;
-const classLng = 105.808822;
+document.getElementById('radiusText').innerText = RADIUS_M + "m";
+document.getElementById('session').value = new URLSearchParams(location.search).get("session") || "";
 
-// Bán kính hợp lệ (đơn vị: mét)
-const RADIUS_METERS = 200;
-document.getElementById('radiusText').innerText = RADIUS_METERS + 'm';
-
-function getQueryParam(name) {
-  return new URLSearchParams(window.location.search).get(name) || "";
+/* ====== HÀM PHỤ ====== */
+function toRad(x){return x*Math.PI/180;}
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
 }
 
-// Haversine (metres)
-function haversine(lat1, lon1, lat2, lon2) {
-  function toRad(x){ return x * Math.PI / 180; }
-  var R = 6371000;
-  var dLat = toRad(lat2 - lat1);
-  var dLon = toRad(lon2 - lon1);
-  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-          Math.sin(dLon/2) * Math.sin(dLon/2);
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return Math.round(R * c);
-}
+/* ====== BIẾN TOÀN CỤC ====== */
+let lat="", lng="", photoBase64="";
 
-/* ===== LOCATION & SESSION ===== */
-document.getElementById('session').value = getQueryParam('session');
-let tokenFromUrl = getQueryParam('token');
-
-let lat = "", lng = "";
-
-/* ===== IMAGE HANDLING ===== */
-let photoBase64 = ""; // store base64 payload (without data:image/... prefix)
-
-// Resize & compress image using canvas, return Promise resolves base64 string without prefix
-function resizeImageFileToBase64(file, maxWidth = 1024, quality = 0.7) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = function(event) {
-      const img = new Image();
-      img.onload = function() {
-        const scale = Math.min(1, maxWidth / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const dataURL = canvas.toDataURL('image/jpeg', quality);
-        const base64 = dataURL.split(',')[1];
-        resolve(base64);
+/* ====== XỬ LÝ ẢNH ====== */
+async function resizeImageToBase64(file,maxW=1024,quality=0.7){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const scale=Math.min(1,maxW/img.width);
+        const canvas=document.createElement("canvas");
+        canvas.width=img.width*scale; canvas.height=img.height*scale;
+        const ctx=canvas.getContext("2d"); ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL("image/jpeg",quality).split(",")[1]);
       };
-      img.onerror = function(e) { reject(e); };
-      img.src = event.target.result;
+      img.onerror=reject; img.src=e.target.result;
     };
-    reader.onerror = function(err) { reject(err); };
-    reader.readAsDataURL(file);
+    reader.onerror=reject; reader.readAsDataURL(file);
   });
 }
 
-document.getElementById('photoInput').addEventListener('change', async function(e) {
-  const f = e.target.files && e.target.files[0];
-  const preview = document.getElementById('photoPreview');
-  if (!f) {
-    photoBase64 = "";
-    preview.innerHTML = "";
-    return;
-  }
-  const maxFileMB = 6;
-  if (f.size > maxFileMB * 1024 * 1024) {
-    alert('Ảnh quá lớn (>' + maxFileMB + ' MB). Vui lòng chọn ảnh khác hoặc chụp lại nhỏ hơn.');
-    e.target.value = ''; photoBase64 = ""; preview.innerHTML = ""; return;
-  }
-  try {
-    preview.innerHTML = 'Đang xử lý ảnh...';
-    const base64 = await resizeImageFileToBase64(f, 1024, 0.75);
-    photoBase64 = base64;
-    preview.innerHTML = '<img src="data:image/jpeg;base64,' + base64 + '" alt="preview" />';
-  } catch(err) {
-    console.error(err);
-    alert('Lỗi xử lý ảnh: ' + (err.message || err));
-    photoBase64 = ""; preview.innerHTML = "";
-  }
+document.getElementById("photoInput").addEventListener("change",async e=>{
+  const f=e.target.files?.[0]; const preview=document.getElementById("photoPreview");
+  if(!f){photoBase64=""; preview.innerHTML=""; return;}
+  if(f.size>6*1024*1024){alert("Ảnh quá lớn (>6MB)"); e.target.value=""; return;}
+  preview.innerHTML="Đang xử lý ảnh...";
+  try{
+    photoBase64=await resizeImageToBase64(f,1024,0.75);
+    preview.innerHTML=`<img src="data:image/jpeg;base64,${photoBase64}" alt="preview"/>`;
+  }catch(err){alert("Lỗi xử lý ảnh"); console.error(err);}
 });
 
-/* ===== GET LOCATION ===== */
-document.getElementById('btnGetLoc').addEventListener('click', function(){
-  if (!navigator.geolocation) {
-    alert('Trình duyệt không hỗ trợ vị trí');
-    return;
-  }
-  document.getElementById('locStatus').innerText = 'Đang lấy vị trí...';
-  navigator.geolocation.getCurrentPosition(function(p){
-    lat = p.coords.latitude;
-    lng = p.coords.longitude;
-    document.getElementById('locStatus').innerText = 'Vị trí: ' + lat.toFixed(6) + ', ' + lng.toFixed(6);
-  }, function(err){
-    document.getElementById('locStatus').innerText = '(Không thể lấy vị trí: ' + (err.message || 'error') + ')';
-    alert('Vui lòng bật vị trí (Location) và cho phép trang web truy cập vị trí.');
-  }, { enableHighAccuracy: true, timeout: 15000 });
+/* ====== LẤY VỊ TRÍ ====== */
+document.getElementById("btnGetLoc").addEventListener("click",()=>{
+  if(!navigator.geolocation){alert("Trình duyệt không hỗ trợ định vị"); return;}
+  const status=document.getElementById("locStatus");
+  status.innerText="Đang lấy vị trí...";
+  navigator.geolocation.getCurrentPosition(
+    p=>{
+      lat=p.coords.latitude; lng=p.coords.longitude;
+      status.innerText=`Vị trí: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    },
+    err=>{
+      status.innerText="Không lấy được vị trí"; 
+      alert("Vui lòng bật GPS và cho phép truy cập vị trí");
+    },
+    {enableHighAccuracy:true,timeout:15000}
+  );
 });
 
-/* ===== SUBMIT ===== */
-document.getElementById('btnSubmit').addEventListener('click', function(){
-  const name = document.getElementById('fullname').value.trim();
-  const mssv = document.getElementById('mssv').value.trim();
-  const email = document.getElementById('email').value.trim();
-  let session = document.getElementById('session').value.trim();
-  if (!name) { alert('Vui lòng nhập Họ & tên'); return; }
-  if (!mssv) { alert('Vui lòng nhập Mã sinh viên'); return; }
-  if (!lat || !lng) { alert('Vui lòng bấm "Lấy vị trí" và bật quyền vị trí (Allow).'); return; }
-  if (!photoBase64) { alert('Vui lòng chụp hoặc chọn ảnh trước khi gửi.'); return; }
+/* ====== GỬI DỮ LIỆU ====== */
+document.getElementById("btnSubmit").addEventListener("click",async ()=>{
+  const name=document.getElementById("fullname").value.trim();
+  const mssv=document.getElementById("mssv").value.trim();
+  const email=document.getElementById("email").value.trim();
+  const session=document.getElementById("session").value.trim();
+  const result=document.getElementById("result");
 
-  // distance check
-  const dist = haversine(lat, lng, classLat, classLng);
-  if (dist > RADIUS_METERS) {
-    alert("Bạn đang ở cách lớp " + dist + " m (vượt quá " + RADIUS_METERS + " m). Không thể điểm danh.");
-    return;
-  }
+  if(!name||!mssv){alert("Vui lòng nhập Họ tên và Mã sinh viên");return;}
+  if(!photoBase64){alert("Vui lòng chọn/chụp ảnh");return;}
+  if(!lat||!lng){alert("Vui lòng bấm 'Lấy vị trí'");return;}
 
-  const payload = {
-    session: session,
-    name: name,
-    mssv: mssv,
-    email: email,
-    latitude: parseFloat(lat),
-    longitude: parseFloat(lng),
-    ua: navigator.userAgent,
-    token: tokenFromUrl || API_TOKEN,
-    photo: photoBase64
+  const dist=haversine(lat,lng,CLASS_LAT,CLASS_LNG);
+  if(dist>RADIUS_M){alert(`Bạn cách lớp ${dist}m (vượt ${RADIUS_M}m)`);return;}
+
+  const payload={
+    session,name,mssv,email,latitude:lat,longitude:lng,
+    userAgent:navigator.userAgent,token:API_TOKEN,photo:photoBase64
   };
 
-  document.getElementById('result').innerText = 'Đang gửi...';
-
-  fetch("https://defaultfc4a97f77b1445b7bf4aef4e95696c.50.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/993a9e1472c24fd7864f8a3d2d1a5b12/triggers/manual/paths/invoke?api-version=1", {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': tokenFromUrl || API_TOKEN
-    },
-    body: JSON.stringify(payload)
-  })
-  .then(async res => {
-    const txt = await res.text();
-    if (res.ok) {
-      document.getElementById('result').innerHTML = '<span style="color:green">Gửi thành công ✓</span>';
-      document.getElementById('fullname').value = '';
-      document.getElementById('mssv').value = '';
-      document.getElementById('photoInput').value = '';
-      document.getElementById('photoPreview').innerHTML = '';
-      photoBase64 = "";
-    } else {
-      document.getElementById('result').innerHTML = '<span class="danger">Lỗi: ' + res.status + ' — ' + txt + '</span>';
+  result.innerText="Đang gửi...";
+  try{
+    const res=await fetch(WEBHOOK_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":API_TOKEN},
+      body:JSON.stringify(payload)
+    });
+    const txt=await res.text();
+    if(res.ok){
+      result.innerHTML="<span style='color:green'>✅ Gửi thành công!</span>";
+      document.getElementById("fullname").value="";
+      document.getElementById("mssv").value="";
+      document.getElementById("photoInput").value="";
+      document.getElementById("photoPreview").innerHTML="";
+      photoBase64="";
+    }else{
+      result.innerHTML=`<span style='color:red'>❌ Lỗi ${res.status}: ${txt}</span>`;
     }
-  })
-  .catch(err => {
-    document.getElementById('result').innerHTML = '<span class="danger">Lỗi gửi: ' + err.message + '</span>';
-  });
-
+  }catch(err){
+    result.innerHTML=`<span style='color:red'>⚠️ Lỗi gửi: ${err.message}</span>`;
+  }
 });
 </script>
 </body>
